@@ -2,6 +2,16 @@
 /* Include standard arduino servo control library */
 #include <Servo.h>
 
+#include <LiquidCrystal.h>
+
+//#include <VL53L0X.h>
+
+/*
+##################################### 
+
+##################################### 
+*/
+
 class DistanceSensor {
 public:
     DistanceSensor();
@@ -25,8 +35,8 @@ void DistanceSensor::setup(int pin) {
 /* */
 bool DistanceSensor::rotateLeft() {
     int servoAngle = servo.read();
-    if(servoAngle>0) {
-        servoAngle--;
+    if(servoAngle>75) {
+        servoAngle = servoAngle - 3;
         servo.write(servoAngle);
         delay(45);
         return true;
@@ -37,8 +47,8 @@ bool DistanceSensor::rotateLeft() {
 /* */
 bool DistanceSensor::rotateRight() {
     int servoAngle = servo.read();
-    if(servoAngle<180) {
-      servoAngle++;
+    if(servoAngle<105) {
+      servoAngle = servoAngle + 3;
       servo.write(servoAngle);
       delay(45);
       return true;
@@ -46,19 +56,21 @@ bool DistanceSensor::rotateRight() {
     return false;
 }
 
+/*
+##################################### 
+
+##################################### 
+*/
 
 class UltrasonicSensor {
 
 public:
     UltrasonicSensor();
     void setup();
-    void loop();
+    int measure();
         
 private:
-    /* */
-    int soundWaveTravelTime;
-    int distanceMeasured;
-    
+        
     /* */
     int triggerPin = 11;
     int echoPin = 10;
@@ -71,17 +83,18 @@ void UltrasonicSensor::setup() {
     /* */
     pinMode(triggerPin, OUTPUT);
     /* */
-    pinMode(echoPin, OUTPUT);   
+    pinMode(echoPin, INPUT);   
     /* */    
     Serial.begin(9600);
-    Serial.println("Ultrasonic Sensor HC-SR04 Test"); // print some text in Serial Monitor
+    Serial.println("Ultrasonic Sensor Test");
     Serial.println("with Arduino UNO R3"); 
 }
 
-void UltrasonicSensor::loop() {
+int UltrasonicSensor::measure() {
     /* Start pulse on state low */
     digitalWrite(triggerPin, LOW);
     delayMicroseconds(2);
+
     
     /* Set pulse on state high */
     digitalWrite(triggerPin, HIGH);
@@ -89,36 +102,141 @@ void UltrasonicSensor::loop() {
 
     /* Set pulse on state low */
     digitalWrite(triggerPin, LOW);
-    
+
     /* Reads the echoPin, returns the sound wave travel time in microseconds */
-    soundWaveTravelTime = pulseIn(echoPin, HIGH);
+    long soundWaveTravelTime = pulseIn(echoPin, HIGH);
     
     /* traveltime of sound wave divided by 2 (go and back) */
-    distanceMeasured = soundWaveTravelTime * 0.034 / 2; 
-
-    /* Displays the distance on the Serial Monitor */  
-    
-    Serial.print("Distance: ");
-    Serial.print(distanceMeasured);
-    Serial.println(" cm");
+    /* 340 m/s = 0.034 cm/us */
+    float distanceMeasured = soundWaveTravelTime * 0.034 / 2.0; 
+        
+    return distanceMeasured;
 }
 
-DistanceSensor sensor;
+
+/*
+##################################### 
+
+##################################### 
+*/
+
+LiquidCrystal liquidCrystal(8, 7, 5, 4, 3, 2);  
+
+class LCD {
+
+public:
+     
+    
+    LCD();
+    void setup();
+    void print(int);
+
+private:  
+     
+};
+
+LCD::LCD() {}
+
+void LCD::setup() {
+    liquidCrystal.begin(16, 2); 
+}
+
+void LCD::print(int distance) {
+
+    //Limpa a tela
+    liquidCrystal.clear();
+    //Posiciona o cursor na coluna 3, linha 0;
+    liquidCrystal.setCursor(1, 0);
+    //Envia o texto entre aspas para o LCD
+    liquidCrystal.print("Dist. Estim.:");
+    liquidCrystal.setCursor(1, 1);
+    char buffer[15];
+    
+    sprintf(buffer, "%d (cm)", distance);
+
+    liquidCrystal.print(buffer);
+    delay(250);  
+}
+
+/*
+##################################### 
+
+##################################### 
+*/
+
+//VL53L0X testing;
+
+
+//DistanceSensor sensor;
 
 UltrasonicSensor ultrasonicSensor;
 
-void setup() {
-    // put your setup code here, to run once:
-    //Movement movement;
-    //ultrasonicSensor.setup();
+
+LCD lcd;
+
+/*
+
+void testSetup() {
+
+    pinMode(12,INPUT_PULLUP);
+    digitalWrite(12,HIGH);
+    Serial.begin(9600);
+    Wire.begin();
+
+    testing.init();
+    testing.setTimeout(500);
+
+    // Start continuous back-to-back mode (take readings as
+    // fast as possible).  To use continuous timed mode
+    // instead, provide a desired inter-measurement period in
+    // ms (e.g. sensor.startContinuous(100)).
+    testing.startContinuous();
 }
 
+void loopTest(){ 
+     //###########################
+
+    int distance =sensor.readRangeContinuousMillimeters();
+  //int distance =sensor.startContinuous(100);
+  
+ //distance = distance;
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.print("mm");
+  if (sensor.timeoutOccurred()) { Serial.print(" TIMEOUT"); }
+           
+
+   //####################################
+}
+
+*/
+
+void setup() {
+    // put your setup code here, to run once:
+    ultrasonicSensor.setup();
+    //sensor.setup(9);
+    lcd.setup();    
+
+    /* */
+    pinMode(6, OUTPUT);
+}
+
+
+
 void loop() {
-    // put your main code here, to run repeatedly:
-    //Movement movement;
-    //movement.moveLeft();
-    //DistanceSensor sensor;
-    //while(sensor.rotateLeft());
-    //while(sensor.rotateRight());
-    //ultrasonicSensor.loop();
+
+    int distance = ultrasonicSensor.measure();       
+    lcd.print(distance);
+
+    if(distance < 25) {
+      /*Write 0V on ESP port (go reverse) */
+      analogWrite(6, 0);  
+    } else if(distance < 45) {
+      /*Write 1.2V on ESP port (go left or right) */
+      analogWrite(6, 60);
+    } else {
+      /*Write 3.3V on ESP port (go front) */
+      analogWrite(6, 160);              
+    }
+    
 }

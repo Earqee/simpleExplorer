@@ -13,8 +13,7 @@ public:
     void goReverse();
     void moveLeft();
     void moveRight();
-    void increaseSpeed();
-    void decreaseSpeed();
+    int accessPreference();
 
 private:
 /* Wheel Control */
@@ -23,10 +22,6 @@ private:
     int rightWheel = D1;
     int rightWheelReverse = D2;
     
-/* PWM Controller */
-    int pwmPin = D7;
-    int pwmVoltage = 0;
-    int pwmMaxVoltage = 1023;
 };
 
 /* Constructor */
@@ -43,9 +38,7 @@ Movement::Movement(
     this->rightWheel = rightWheel;
     this->rightWheelReverse = rightWheelReverse;
     /* */
-    this->pwmPin = pwmPin;   
-    this->pwmMaxVoltage  = pwmMaxVoltage;
-    /* */
+    this->preferLeftRotation = 0;
     Movement();
 }
 
@@ -56,8 +49,6 @@ void Movement::setup() {
     pinMode(leftWheelReverse, OUTPUT);
     pinMode(rightWheel, OUTPUT);
     pinMode(rightWheelReverse, OUTPUT);
-    /* Set max pwm voltage */
-    analogWriteRange(pwmMaxVoltage);
 }
 
 /* Moves to front using maximum available speed */
@@ -92,33 +83,75 @@ void Movement::moveRight() {
     digitalWrite(leftWheelReverse, 0);
 }
 
-/* */
-void Movement::increaseSpeed() {
-    if(pwmVoltage < pwmMaxVoltage)
-      pwmVoltage++;
-    analogWrite(pwmPin, pwmVoltage);
-}
 
-/* */
-void Movement::decreaseSpeed() {
-    if(pwmVoltage > 0)
-      pwmVoltage--;
-    analogWrite(pwmPin, pwmVoltage);
+int Movement::accessPreference() {
+    this->preferLeftRotation = !this->preferLeftRotation;
+    return !this->preferLeftRotation;
 }
 
 
 #endif
 
+Movement movement;
+
+#include <vector>
+
+std::vector<int> previousMeasuresArray;
+int currentLocation = 0;
+int average = 0;
+
+void insert(int value) {
+  int insertedMeasure = value;
+  int erasedMeasure = previousMeasuresArray[currentLocation];
+  average = average - erasedMeasure/10 + insertedMeasure/10;
+  previousMeasuresArray[currentLocation] = insertedMeasure;
+  currentLocation = (currentLocation+1) % 10;  
+}
+
 void setup() {
   // put your setup code here, to run once:
-  Movement movement;
-    
-    
+    movement.setup();
 
+    pinMode(D5, INPUT);
+
+    Serial.begin(9600);
+
+    previousMeasuresArray.resize(10);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  Movement movement;
-  movement.moveLeft();
+
+  int currentVoltageMeasure = analogRead(A0);
+
+  insert(currentVoltageMeasure);
+
+  if(average < 100) {
+    /*Receiving ~0V on ESP port (go reverse) */
+      movement.goReverse(); 
+  } else if(average < 400) {
+    /* Receiving <~1.2V on ESP psort (go left or right) */
+      if(movement.accessPreference() == 0 || 1) {
+          movement.moveRight();        
+      } else {    
+          movement.moveLeft();         
+      } 
+  } else {
+    /*Receiving >1.2V on ESP port (go front) */
+      movement.goFront();
+  }
+
+  Serial.print("Average Value = ");
+  Serial.print(average);
+  Serial.print("  ,  Measured = ");
+  Serial.println(currentVoltageMeasure);
+  
+  /*
+  if(digitalRead(D5) == LOW) {
+    movement.goFront();
+  } else {
+    movement.moveLeft();
+  }
+  */
+  
 }
