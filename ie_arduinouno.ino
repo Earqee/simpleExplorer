@@ -187,7 +187,7 @@ void LCD::setup() {
     liquidCrystal.begin(16, 2); 
 }
 
-void LCD::print(int infraredDistance, int ultrasonicDistance) {
+void LCD::print(int ultrasonicDistance, int infraredDistance) {
 
     /* Limpa a tela */
     liquidCrystal.clear();
@@ -198,7 +198,7 @@ void LCD::print(int infraredDistance, int ultrasonicDistance) {
     liquidCrystal.setCursor(1, 1);
     char buffer[15];
     
-    sprintf(buffer, "%d (cm) %d (cm)", infraredDistance, ultrasonicDistance/10);
+    sprintf(buffer, "%d (cm) %d (cm)", ultrasonicDistance/10, infraredDistance);
 
     liquidCrystal.print(buffer);
     delay(250);  
