@@ -21,6 +21,8 @@ private:
     int leftWheelReverse = D7;
     int rightWheel = D1;
     int rightWheelReverse = D2;
+
+    int preferLeftRotation = 0;
     
 };
 
@@ -108,6 +110,7 @@ void insert(int value) {
   currentLocation = (currentLocation+1) % 10;  
 }
 
+
 void setup() {
   // put your setup code here, to run once:
     movement.setup();
@@ -117,6 +120,8 @@ void setup() {
     Serial.begin(9600);
 
     previousMeasuresArray.resize(10);
+
+   
 }
 
 void loop() {
@@ -145,13 +150,6 @@ void loop() {
   Serial.print(average);
   Serial.print("  ,  Measured = ");
   Serial.println(currentVoltageMeasure);
-  
-  /*
-  if(digitalRead(D5) == LOW) {
-    movement.goFront();
-  } else {
-    movement.moveLeft();
-  }
-  */
+
   
 }

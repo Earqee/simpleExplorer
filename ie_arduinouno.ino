@@ -4,63 +4,117 @@
 
 #include <LiquidCrystal.h>
 
-//#include <VL53L0X.h>
+#include "VL53L0X.h"
 
-/*
-##################################### 
+#include <Wire.h>
 
-##################################### 
-*/
 
-class DistanceSensor {
+class InfraredSensor {
 public:
-    DistanceSensor();
+    InfraredSensor();
     void setup(int);
     bool rotateLeft();
     bool rotateRight();
+    int measure();
+    void rotate();
 private:
     Servo servo;
     int sensorRotation;
+    bool preferLeftRotation = true;
+    
+    /* */
+    VL53L0X sensor; 
+    int sampleStartTime = millis(); 
+    /* Sampling rate 10 Hz */     
+    int samplingRate = 100; 
 
+    int rotationStartTime = millis();
+    /* Rotation rate 10 Hz */
+    int rotationRate = 10;     
 };
 
 /* */
-DistanceSensor::DistanceSensor() {}
+InfraredSensor::InfraredSensor() {}
 
 /* */
-void DistanceSensor::setup(int pin) {
+void InfraredSensor::setup(int pin) {
     servo.attach(pin);
+
+    Serial.begin(9600);
+    
+    Wire.begin(); 
+    /* Setup I2C interface */
+    /* Use 400 kHz I2C */
+    Wire.setClock(400000); 
+
+    /* Sensor timeout */
+    sensor.setTimeout(500); 
+    
+    if (!sensor.init())//try to initilise the sensor
+    {
+        /* Sensor does not respond within the timeout time */
+        Serial.println("VL53L0X is not responding");
+    }
+    else
+    {
+        //SET THE SENSOR TO LONG RANGE MODE
+        /* lower the return signal rate limit (default is 0.25 MCPS) */
+        sensor.setSignalRateLimit(0.1);
+        /* increase laser pulse periods (defaults are 14 and 10 PCLKs) */
+        sensor.setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
+        sensor.setVcselPulsePeriod(VL53L0X::VcselPeriodFinalRange, 14);
+        /* Set its timing budget in microseconds longer timing budgets will give more accurate measurements */
+        sensor.setMeasurementTimingBudget(40000); 
+        /* Sets the interval where a measurement can be requested in milliseconds */
+        sensor.startContinuous(50); 
+    }      
 }
 
 /* */
-bool DistanceSensor::rotateLeft() {
+bool InfraredSensor::rotateLeft() {
     int servoAngle = servo.read();
-    if(servoAngle>75) {
-        servoAngle = servoAngle - 3;
+    if(servoAngle> 60) {
+        servoAngle = servoAngle - 50;
         servo.write(servoAngle);
-        delay(45);
+        preferLeftRotation = true;
         return true;
     }
-    return false;
+    preferLeftRotation = false;
+    return false;    
 }
 
 /* */
-bool DistanceSensor::rotateRight() {
+bool InfraredSensor::rotateRight() {
     int servoAngle = servo.read();
-    if(servoAngle<105) {
-      servoAngle = servoAngle + 3;
+    if(servoAngle<120) {
+      servoAngle = servoAngle + 50;
       servo.write(servoAngle);
-      delay(45);
+      preferLeftRotation = false;
       return true;
     }
+    preferLeftRotation = true;
     return false;
 }
 
-/*
-##################################### 
 
-##################################### 
-*/
+int InfraredSensor::measure() {
+    int distance = 0;
+    if((millis()- sampleStartTime) > samplingRate) {
+        distance = sensor.readRangeContinuousMillimeters();
+        Serial.println(distance); //Get a reading in millimeters
+        sampleStartTime = millis();
+    }
+    return distance;
+}
+
+void InfraredSensor::rotate(){
+    if(this->preferLeftRotation) {
+      rotateLeft();      
+    } else {
+      rotateRight();
+    }
+}
+
 
 class UltrasonicSensor {
 
@@ -113,23 +167,15 @@ int UltrasonicSensor::measure() {
     return distanceMeasured;
 }
 
-
-/*
-##################################### 
-
-##################################### 
-*/
-
 LiquidCrystal liquidCrystal(8, 7, 5, 4, 3, 2);  
+
 
 class LCD {
 
 public:
-     
-    
     LCD();
     void setup();
-    void print(int);
+    void print(int, int);
 
 private:  
      
@@ -141,97 +187,57 @@ void LCD::setup() {
     liquidCrystal.begin(16, 2); 
 }
 
-void LCD::print(int distance) {
+void LCD::print(int infraredDistance, int ultrasonicDistance) {
 
-    //Limpa a tela
+    /* Limpa a tela */
     liquidCrystal.clear();
-    //Posiciona o cursor na coluna 3, linha 0;
+    /* Posiciona o cursor na coluna 3, linha 0;*/
     liquidCrystal.setCursor(1, 0);
-    //Envia o texto entre aspas para o LCD
+    /* Envia o texto entre aspas para o LCD */
     liquidCrystal.print("Dist. Estim.:");
     liquidCrystal.setCursor(1, 1);
     char buffer[15];
     
-    sprintf(buffer, "%d (cm)", distance);
+    sprintf(buffer, "%d (cm) %d (cm)", infraredDistance, ultrasonicDistance/10);
 
     liquidCrystal.print(buffer);
     delay(250);  
 }
 
-/*
-##################################### 
-
-##################################### 
-*/
-
-//VL53L0X testing;
-
-
-//DistanceSensor sensor;
+InfraredSensor infraredSensor;
 
 UltrasonicSensor ultrasonicSensor;
 
-
 LCD lcd;
-
-/*
-
-void testSetup() {
-
-    pinMode(12,INPUT_PULLUP);
-    digitalWrite(12,HIGH);
-    Serial.begin(9600);
-    Wire.begin();
-
-    testing.init();
-    testing.setTimeout(500);
-
-    // Start continuous back-to-back mode (take readings as
-    // fast as possible).  To use continuous timed mode
-    // instead, provide a desired inter-measurement period in
-    // ms (e.g. sensor.startContinuous(100)).
-    testing.startContinuous();
-}
-
-void loopTest(){ 
-     //###########################
-
-    int distance =sensor.readRangeContinuousMillimeters();
-  //int distance =sensor.startContinuous(100);
-  
- //distance = distance;
-  Serial.print("Distance: ");
-  Serial.print(distance);
-  Serial.print("mm");
-  if (sensor.timeoutOccurred()) { Serial.print(" TIMEOUT"); }
-           
-
-   //####################################
-}
-
-*/
 
 void setup() {
     // put your setup code here, to run once:
     ultrasonicSensor.setup();
-    //sensor.setup(9);
+    
     lcd.setup();    
-
+ 
     /* */
     pinMode(6, OUTPUT);
+    
+    //
+    infraredSensor.setup(9);   
+
 }
-
-
 
 void loop() {
 
-    int distance = ultrasonicSensor.measure();       
-    lcd.print(distance);
+    int ultrasonicMeasure = ultrasonicSensor.measure();       
+    
+    int infraredMeasure = infraredSensor.measure();
 
-    if(distance < 25) {
+    lcd.print(ultrasonicMeasure, infraredMeasure);
+
+    infraredSensor.rotate();
+   
+    if(ultrasonicMeasure < 25) {
       /*Write 0V on ESP port (go reverse) */
       analogWrite(6, 0);  
-    } else if(distance < 45) {
+    } else if(ultrasonicMeasure < 45 || (infraredMeasure > 0 && infraredMeasure < 200) ) {
       /*Write 1.2V on ESP port (go left or right) */
       analogWrite(6, 60);
     } else {
